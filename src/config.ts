@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { AuthorizationError, ConfigError } from "./errors.js";
 import { normalizeRemotePath } from "./paths.js";
+import { isToolName } from "./tool-catalog.js";
+import type { ToolName } from "./tool-catalog.js";
 
 const envSchema = z.object({
   SFTP_HOST: z.string().optional(),
@@ -21,6 +23,7 @@ const envSchema = z.object({
   SFTP_MAX_CONCURRENCY: z.string().optional(),
   SFTP_TRANSFER_CONCURRENCY: z.string().optional(),
   SFTP_CHUNK_SIZE: z.string().optional(),
+  SFTP_DISABLED_TOOLS: z.string().optional(),
 });
 
 export type SftpConfig = {
@@ -37,6 +40,7 @@ export type SftpConfig = {
   readonly allowedReadPrefix?: string;
   readonly maxReadBytes: number;
   readonly maxConcurrency: number;
+  readonly disabledTools: readonly ToolName[];
   readonly transfer: {
     readonly concurrency: number;
     readonly chunkSize: number;
@@ -95,6 +99,23 @@ function strictBoolean(value: string | undefined, fallback: boolean, name: strin
   throw new ConfigError(`${name} must be exactly true or false`);
 }
 
+function disabledTools(value: string | undefined): readonly ToolName[] {
+  if (value === undefined || value.trim().length === 0) {
+    return [];
+  }
+  const names: ToolName[] = [];
+  for (const entry of value.split(",")) {
+    const name = entry.trim();
+    if (!isToolName(name)) {
+      throw new ConfigError(`SFTP_DISABLED_TOOLS contains invalid tool name: ${name || "<empty>"}`);
+    }
+    if (!names.includes(name)) {
+      names.push(name);
+    }
+  }
+  return names;
+}
+
 export function loadConfig(environment: Record<string, string | undefined>): SftpConfig {
   const env = envSchema.parse(environment);
   const privateKeyPath = env.SFTP_PRIVATE_KEY?.trim();
@@ -124,6 +145,7 @@ export function loadConfig(environment: Record<string, string | undefined>): Sft
     ),
     maxReadBytes: positiveInteger(env.SFTP_MAX_READ_BYTES, 1024 * 1024, "SFTP_MAX_READ_BYTES"),
     maxConcurrency: positiveInteger(env.SFTP_MAX_CONCURRENCY, 8, "SFTP_MAX_CONCURRENCY"),
+    disabledTools: disabledTools(env.SFTP_DISABLED_TOOLS),
     transfer: {
       concurrency: positiveInteger(env.SFTP_TRANSFER_CONCURRENCY, 64, "SFTP_TRANSFER_CONCURRENCY"),
       chunkSize: positiveInteger(env.SFTP_CHUNK_SIZE, 32768, "SFTP_CHUNK_SIZE", 1024),

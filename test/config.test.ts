@@ -66,4 +66,66 @@ describe("loadConfig", () => {
     // Then
     expect(load).toThrow("SFTP_ALLOW_DESTRUCTIVE must be exactly true or false");
   });
+
+  it("parses disabled tools with whitespace trimmed and duplicates removed", () => {
+    // Given
+    const env = {
+      SFTP_HOST: "example.test",
+      SFTP_USER: "deploy",
+      SFTP_DISABLED_TOOLS: " sftp_upload, sftp_sync_dir ,sftp_upload ",
+    };
+
+    // When
+    const config = loadConfig(env);
+
+    // Then
+    expect(config.disabledTools).toEqual(["sftp_upload", "sftp_sync_dir"]);
+  });
+
+  it.each([undefined, "   "])("returns no disabled tools when value is %s", (value) => {
+    // Given
+    const env = { SFTP_HOST: "example.test", SFTP_USER: "deploy", SFTP_DISABLED_TOOLS: value };
+
+    // When
+    const config = loadConfig(env);
+
+    // Then
+    expect(config.disabledTools).toEqual([]);
+  });
+
+  it("rejects unknown disabled tool names", () => {
+    // Given
+    const env = {
+      SFTP_HOST: "example.test",
+      SFTP_USER: "deploy",
+      SFTP_DISABLED_TOOLS: "sftp_upload,sftp_unknown",
+    };
+
+    // When
+    const load = (): void => {
+      loadConfig(env);
+    };
+
+    // Then
+    expect(load).toThrow(ConfigError);
+    expect(load).toThrow("sftp_unknown");
+  });
+
+  it("rejects empty disabled tool entries", () => {
+    // Given
+    const env = {
+      SFTP_HOST: "example.test",
+      SFTP_USER: "deploy",
+      SFTP_DISABLED_TOOLS: "sftp_upload,,sftp_sync_dir",
+    };
+
+    // When
+    const load = (): void => {
+      loadConfig(env);
+    };
+
+    // Then
+    expect(load).toThrow(ConfigError);
+    expect(load).toThrow("<empty>");
+  });
 });

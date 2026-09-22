@@ -33,8 +33,13 @@ Use `dist/index.js` as the stdio executable; it runs under Node. Package bin is 
 | `SFTP_ALLOW_DESTRUCTIVE`    | `true`    | Exact boolean: `false` denies delete, rmdir, rename, delete batches, and non-dry-run `sftp_sync_dir` |
 | `SFTP_ALLOWED_WRITE_PREFIX` | unset     | Optional absolute POSIX lexical prefix for remote mutations                                          |
 | `SFTP_ALLOWED_READ_PREFIX`  | unset     | Optional absolute POSIX lexical prefix for remote reads and remote sync traversal                    |
+| `SFTP_DISABLED_TOOLS`       | unset     | Comma-separated MCP tool names to omit from registration                                             |
 
-Malformed numbers, malformed `SFTP_READ_ONLY` or `SFTP_ALLOW_DESTRUCTIVE`, missing host/user, non-absolute prefixes, or an unreadable private-key path fail startup. Private-key contents are never emitted.
+Set `SFTP_DISABLED_TOOLS` with canonical tool names separated by commas, for example `SFTP_DISABLED_TOOLS=sftp_upload,sftp_sync_dir`. Whitespace around names is ignored and duplicate names are deduplicated. Unset or blank values disable no tools. Unknown names and empty entries, such as `sftp_upload,,sftp_sync_dir`, fail startup with `ConfigError`.
+
+Disabled tools are not registered, so they are absent from MCP tool listings and never enter client tool context. This is not a runtime tool-call denial.
+
+Malformed numbers, malformed `SFTP_READ_ONLY` or `SFTP_ALLOW_DESTRUCTIVE`, missing host/user, non-absolute prefixes, invalid `SFTP_DISABLED_TOOLS`, or an unreadable private-key path fail startup. Private-key contents are never emitted.
 
 ## Remote Authorization
 

@@ -6,31 +6,14 @@ import type { McpResult } from "./mcp-results.js";
 import { fail } from "./mcp-results.js";
 import { createPathGuards } from "./paths.js";
 import type { SftpProvider } from "./sftp-types.js";
+import { toolNames } from "./tool-catalog.js";
+import type { ToolName } from "./tool-catalog.js";
 import type { ToolConfig, ToolHandler } from "./tool-types.js";
 import { createBatchTools } from "./tools-batch.js";
 import { createReadTools } from "./tools-read.js";
 import { createWriteTools } from "./tools-write.js";
 
-const toolNames = [
-  "sftp_list",
-  "sftp_read",
-  "sftp_write",
-  "sftp_delete",
-  "sftp_mkdir",
-  "sftp_rmdir",
-  "sftp_rename",
-  "sftp_upload",
-  "sftp_download",
-  "sftp_stat",
-  "sftp_exists",
-  "sftp_write_many",
-  "sftp_delete_many",
-  "sftp_upload_many",
-  "sftp_download_many",
-  "sftp_sync_dir",
-] as const;
-
-export type ToolName = (typeof toolNames)[number];
+export type { ToolName } from "./tool-catalog.js";
 
 export const toolDescriptions = {
   sftp_list: "List a remote directory (read-only). Returns type/size/mtime/name per entry.",
@@ -58,7 +41,11 @@ export type ServerOptions = {
   readonly config: Partial<
     Pick<
       SftpConfig,
-      "readOnly" | "destructiveActionsAllowed" | "allowedReadPrefix" | "allowedWritePrefix"
+      | "readOnly"
+      | "destructiveActionsAllowed"
+      | "allowedReadPrefix"
+      | "allowedWritePrefix"
+      | "disabledTools"
     >
   > &
     Partial<ToolConfig>;
@@ -97,7 +84,7 @@ export function createToolRegistry(options: ServerOptions): ToolRegistry {
   };
 }
 
-const schemas = {
+const schemas: Readonly<Record<ToolName, z.ZodObject<z.ZodRawShape>>> = {
   sftp_list: z.object({ remotePath: z.string() }),
   sftp_read: z.object({ remotePath: z.string() }),
   sftp_write: z.object({
@@ -142,27 +129,17 @@ const schemas = {
     dryRun: z.boolean().optional(),
     concurrency: z.number().int().positive().optional(),
   }),
-} as const;
+};
 
 export function createServer(options: ServerOptions): McpServer {
   const server = new McpServer({ name: "mcp-server-sftp", version: "1.1.0" });
   const registry = createToolRegistry(options);
-  registerTool(server, registry, "sftp_list", schemas.sftp_list);
-  registerTool(server, registry, "sftp_read", schemas.sftp_read);
-  registerTool(server, registry, "sftp_write", schemas.sftp_write);
-  registerTool(server, registry, "sftp_delete", schemas.sftp_delete);
-  registerTool(server, registry, "sftp_mkdir", schemas.sftp_mkdir);
-  registerTool(server, registry, "sftp_rmdir", schemas.sftp_rmdir);
-  registerTool(server, registry, "sftp_rename", schemas.sftp_rename);
-  registerTool(server, registry, "sftp_upload", schemas.sftp_upload);
-  registerTool(server, registry, "sftp_download", schemas.sftp_download);
-  registerTool(server, registry, "sftp_stat", schemas.sftp_stat);
-  registerTool(server, registry, "sftp_exists", schemas.sftp_exists);
-  registerTool(server, registry, "sftp_write_many", schemas.sftp_write_many);
-  registerTool(server, registry, "sftp_delete_many", schemas.sftp_delete_many);
-  registerTool(server, registry, "sftp_upload_many", schemas.sftp_upload_many);
-  registerTool(server, registry, "sftp_download_many", schemas.sftp_download_many);
-  registerTool(server, registry, "sftp_sync_dir", schemas.sftp_sync_dir);
+  for (const name of toolNames) {
+    if (options.config.disabledTools?.includes(name) === true) {
+      continue;
+    }
+    registerTool(server, registry, name, schemas[name]);
+  }
   return server;
 }
 
