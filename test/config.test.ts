@@ -9,7 +9,7 @@ describe("loadConfig", () => {
       SFTP_HOST: "example.test",
       SFTP_USER: "deploy",
       SFTP_READ_ONLY: "true",
-      SFTP_ALLOWED_PREFIX: "/writes/../deploy/",
+      SFTP_ALLOWED_WRITE_PREFIX: "/writes/../deploy/",
       SFTP_ALLOWED_READ_PREFIX: "/reads/./public/",
     };
 

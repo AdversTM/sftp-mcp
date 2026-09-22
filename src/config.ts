@@ -14,7 +14,7 @@ const envSchema = z.object({
   SFTP_PASSPHRASE: z.string().optional(),
   SFTP_READ_ONLY: z.string().optional(),
   SFTP_ALLOW_DESTRUCTIVE: z.string().optional(),
-  SFTP_ALLOWED_PREFIX: z.string().optional(),
+  SFTP_ALLOWED_WRITE_PREFIX: z.string().optional(),
   SFTP_ALLOWED_READ_PREFIX: z.string().optional(),
   SFTP_MAX_READ_BYTES: z.string().optional(),
   SFTP_READY_TIMEOUT: z.string().optional(),
@@ -134,7 +134,10 @@ export function loadConfig(environment: Record<string, string | undefined>): Sft
       ? {}
       : { passphrase }),
     ...(() => {
-      const allowedWritePrefix = optionalPrefix(env.SFTP_ALLOWED_PREFIX, "SFTP_ALLOWED_PREFIX");
+      const allowedWritePrefix = optionalPrefix(
+        env.SFTP_ALLOWED_WRITE_PREFIX,
+        "SFTP_ALLOWED_WRITE_PREFIX",
+      );
       return allowedWritePrefix === undefined ? {} : { allowedWritePrefix };
     })(),
     ...(() => {

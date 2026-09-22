@@ -31,14 +31,14 @@ Use `dist/index.js` as the stdio executable; it runs under Node. Package bin is 
 | `SFTP_CHUNK_SIZE`           | `32768`   | `fastPut` and `fastGet` chunk size, minimum 1024                                                     |
 | `SFTP_READ_ONLY`            | `false`   | Exact boolean: `true` denies every remote mutation, including `sftp_sync_dir` dry runs               |
 | `SFTP_ALLOW_DESTRUCTIVE`    | `true`    | Exact boolean: `false` denies delete, rmdir, rename, delete batches, and non-dry-run `sftp_sync_dir` |
-| `SFTP_ALLOWED_PREFIX`       | unset     | Optional absolute POSIX lexical prefix for remote mutations                                          |
+| `SFTP_ALLOWED_WRITE_PREFIX` | unset     | Optional absolute POSIX lexical prefix for remote mutations                                          |
 | `SFTP_ALLOWED_READ_PREFIX`  | unset     | Optional absolute POSIX lexical prefix for remote reads and remote sync traversal                    |
 
 Malformed numbers, malformed `SFTP_READ_ONLY` or `SFTP_ALLOW_DESTRUCTIVE`, missing host/user, non-absolute prefixes, or an unreadable private-key path fail startup. Private-key contents are never emitted.
 
 ## Remote Authorization
 
-`SFTP_ALLOWED_PREFIX` only controls remote mutations: write, delete, mkdir, rmdir, both rename paths, upload, mutating batches, and `sftp_sync_dir`. `SFTP_READ_ONLY=true` rejects every mutation, including dry-run sync, before any SFTP request.
+`SFTP_ALLOWED_WRITE_PREFIX` only controls remote mutations: write, delete, mkdir, rmdir, both rename paths, upload, mutating batches, and `sftp_sync_dir`. `SFTP_READ_ONLY=true` rejects every mutation, including dry-run sync, before any SFTP request.
 
 `SFTP_ALLOW_DESTRUCTIVE=false` still permits writes, uploads, mkdir, and their write/upload batches. It rejects deletes, both non-recursive and recursive rmdir, every rename or move, delete batches, and every non-dry-run `sftp_sync_dir` before local traversal or SFTP calls. A dry-run `sftp_sync_dir` remains permitted and only reports its plan. `SFTP_READ_ONLY=true` takes precedence.
 

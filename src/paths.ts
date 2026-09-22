@@ -35,7 +35,7 @@ function withinPrefix(path: string, prefix: string): boolean {
 
 function guardPrefix(path: string, prefix: string | undefined, kind: "read" | "write"): string {
   if (prefix !== undefined && !withinPrefix(path, prefix)) {
-    const variable = kind === "read" ? "SFTP_ALLOWED_READ_PREFIX" : "SFTP_ALLOWED_PREFIX";
+    const variable = kind === "read" ? "SFTP_ALLOWED_READ_PREFIX" : "SFTP_ALLOWED_WRITE_PREFIX";
     throw new AuthorizationError(`${kind} denied: '${path}' is outside ${variable} '${prefix}'`);
   }
   return path;
