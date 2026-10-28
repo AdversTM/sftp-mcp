@@ -16,29 +16,44 @@ function readEnv(name: string): string | undefined {
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig(process.env);
   const sink = createLogSink(readEnv("SFTP_LOG_FILE"));
   logDiagnostic = createEntrypointLogger(sink);
-  const provider = new Ssh2SftpProvider(config);
-  const server = createServer({ provider, config });
+  const config = loadConfig(process.env);
+  const servers = config.servers.map((serverConfig) => ({
+    id: serverConfig.id,
+    provider: new Ssh2SftpProvider(serverConfig),
+    policy: serverConfig,
+    label: `${serverConfig.username}@${serverConfig.host}:${serverConfig.port}`,
+    ...(serverConfig.description === undefined ? {} : { description: serverConfig.description }),
+  }));
+  const server = createServer({ servers, config });
   const stop = (): void => {
-    provider.close();
+    for (const entry of servers) {
+      entry.provider.close();
+    }
     sink?.close();
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
   await server.connect(new StdioServerTransport());
-  void provider.warm().catch((error: unknown) => {
-    logDiagnostic(
-      `[sftp-mcp] warm-connect failed (will retry on first call): ${errorMessage(error)}`,
-    );
-  });
+  for (const entry of servers) {
+    void entry.provider.warm().catch((error: unknown) => {
+      logDiagnostic(
+        `[sftp-mcp] warm-connect to '${entry.id}' failed (will retry on first call): ${errorMessage(error)}`,
+      );
+    });
+  }
   logDiagnostic(
-    `[sftp-mcp] ready → ${config.username}@${config.host}:${config.port}${
-      config.allowedWritePrefix === undefined
-        ? ""
-        : ` (writes limited to ${config.allowedWritePrefix})`
-    }`,
+    `[sftp-mcp] ready → ${servers
+      .map(
+        (entry) =>
+          `${entry.id} (${entry.label}${
+            entry.policy.allowedWritePrefix === undefined
+              ? ""
+              : `, writes limited to ${entry.policy.allowedWritePrefix}`
+          })`,
+      )
+      .join(", ")}`,
   );
 }
 

@@ -7,6 +7,8 @@ describe("MCP tool metadata", () => {
   it("preserves every registered tool description", () => {
     // Given
     const expected = {
+      sftp_list_servers:
+        "List configured SFTP servers (id, user@host:port, access policy, description). Pass the id as `server` to every other sftp_* tool.",
       sftp_list: "List a remote directory (read-only). Returns type/size/mtime/name per entry.",
       sftp_read:
         "Read a remote text file (read-only). Refuses files larger than SFTP_MAX_READ_BYTES.",

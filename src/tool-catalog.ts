@@ -1,4 +1,5 @@
 export const toolNames = [
+  "sftp_list_servers",
   "sftp_list",
   "sftp_read",
   "sftp_write",

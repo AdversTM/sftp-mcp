@@ -2,9 +2,11 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { SftpConfig } from "./config.js";
+import { ConfigError } from "./errors.js";
 import type { McpResult } from "./mcp-results.js";
-import { fail } from "./mcp-results.js";
+import { fail, ok } from "./mcp-results.js";
 import { createPathGuards } from "./paths.js";
+import type { PathGuardConfig } from "./paths.js";
 import type { SftpProvider } from "./sftp-types.js";
 import { toolNames } from "./tool-catalog.js";
 import type { ToolName } from "./tool-catalog.js";
@@ -16,6 +18,8 @@ import { createWriteTools } from "./tools-write.js";
 export type { ToolName } from "./tool-catalog.js";
 
 export const toolDescriptions = {
+  sftp_list_servers:
+    "List configured SFTP servers (id, user@host:port, access policy, description). Pass the id as `server` to every other sftp_* tool.",
   sftp_list: "List a remote directory (read-only). Returns type/size/mtime/name per entry.",
   sftp_read: "Read a remote text file (read-only). Refuses files larger than SFTP_MAX_READ_BYTES.",
   sftp_write: "Write/overwrite a remote text file from inline content.",
@@ -36,25 +40,44 @@ export const toolDescriptions = {
     "Sync a local directory to a remote directory: upload files that are missing, size-different, or newer (parallel). Optionally delete remote files not present locally. Use dryRun to preview.",
 } satisfies Record<ToolName, string>;
 
-export type ServerOptions = {
+export type ServerEntry = {
+  readonly id: string;
   readonly provider: SftpProvider;
-  readonly config: Partial<
-    Pick<
-      SftpConfig,
-      | "readOnly"
-      | "destructiveActionsAllowed"
-      | "allowedReadPrefix"
-      | "allowedWritePrefix"
-      | "disabledTools"
-    >
-  > &
-    Partial<ToolConfig>;
+  readonly policy?: Partial<PathGuardConfig>;
+  readonly label?: string;
+  readonly description?: string;
+};
+
+export type ServerOptions = {
+  readonly servers: readonly ServerEntry[];
+  readonly config: Partial<Pick<SftpConfig, "disabledTools">> & Partial<ToolConfig>;
 };
 
 export type ToolRegistry = {
   readonly invoke: (name: ToolName, input: unknown) => Promise<McpResult>;
-  readonly handlers: Readonly<Record<string, ToolHandler>>;
 };
+
+const serverSelectorSchema = z.object({ server: z.string() });
+
+function describeServer(entry: ServerEntry): string {
+  const policy = entry.policy ?? {};
+  const flags = [
+    ...(policy.readOnly === true
+      ? ["read-only"]
+      : policy.destructiveActionsAllowed === false
+        ? ["non-destructive"]
+        : []),
+    ...(policy.allowedReadPrefix === undefined ? [] : [`read prefix ${policy.allowedReadPrefix}`]),
+    ...(policy.allowedWritePrefix === undefined
+      ? []
+      : [`write prefix ${policy.allowedWritePrefix}`]),
+  ];
+  return [
+    entry.label === undefined ? entry.id : `${entry.id}: ${entry.label}`,
+    flags.length === 0 ? "" : ` [${flags.join("; ")}]`,
+    entry.description === undefined ? "" : ` — ${entry.description}`,
+  ].join("");
+}
 
 function toolConfig(config: ServerOptions["config"]): ToolConfig {
   return {
@@ -65,19 +88,37 @@ function toolConfig(config: ServerOptions["config"]): ToolConfig {
 }
 
 export function createToolRegistry(options: ServerOptions): ToolRegistry {
-  const dependencies = {
-    provider: options.provider,
-    guards: createPathGuards(options.config),
-    config: toolConfig(options.config),
-  };
-  const handlers = {
-    ...createReadTools(dependencies),
-    ...createWriteTools(dependencies),
-    ...createBatchTools(dependencies),
-  };
+  const config = toolConfig(options.config);
+  const handlersByServer = new Map<string, Readonly<Record<string, ToolHandler>>>();
+  for (const entry of options.servers) {
+    const dependencies = {
+      provider: entry.provider,
+      guards: createPathGuards(entry.policy),
+      config,
+    };
+    handlersByServer.set(entry.id, {
+      ...createReadTools(dependencies),
+      ...createWriteTools(dependencies),
+      ...createBatchTools(dependencies),
+    });
+  }
+  const available = options.servers.map((entry) => entry.id).join(", ");
+  const listing = `servers (${options.servers.length})\n${options.servers
+    .map(describeServer)
+    .join("\n")}`;
   return {
-    handlers,
     async invoke(name: ToolName, input: unknown) {
+      if (name === "sftp_list_servers") {
+        return ok(listing);
+      }
+      const selector = serverSelectorSchema.safeParse(input);
+      if (!selector.success) {
+        return fail(`server is required (available: ${available})`);
+      }
+      const handlers = handlersByServer.get(selector.data.server);
+      if (handlers === undefined) {
+        return fail(`unknown server: '${selector.data.server}' (available: ${available})`);
+      }
       const handler = handlers[name];
       return handler === undefined ? fail(`unknown tool: ${name}`) : handler(input);
     },
@@ -85,6 +126,7 @@ export function createToolRegistry(options: ServerOptions): ToolRegistry {
 }
 
 const schemas: Readonly<Record<ToolName, z.ZodObject<z.ZodRawShape>>> = {
+  sftp_list_servers: z.object({}),
   sftp_list: z.object({ remotePath: z.string() }),
   sftp_read: z.object({ remotePath: z.string() }),
   sftp_write: z.object({
@@ -133,12 +175,25 @@ const schemas: Readonly<Record<ToolName, z.ZodObject<z.ZodRawShape>>> = {
 
 export function createServer(options: ServerOptions): McpServer {
   const server = new McpServer({ name: "mcp-server-sftp", version: "1.1.0" });
+  const [firstId, ...otherIds] = options.servers.map((entry) => entry.id);
+  if (firstId === undefined) {
+    throw new ConfigError("at least one SFTP server must be configured");
+  }
+  const serverParameter = z
+    .enum([firstId, ...otherIds])
+    .describe("Target server id (see sftp_list_servers).");
   const registry = createToolRegistry(options);
   for (const name of toolNames) {
     if (options.config.disabledTools?.includes(name) === true) {
       continue;
     }
-    registerTool(server, registry, name, schemas[name]);
+    const schema = schemas[name];
+    registerTool(
+      server,
+      registry,
+      name,
+      name === "sftp_list_servers" ? schema : schema.extend({ server: serverParameter }),
+    );
   }
   return server;
 }

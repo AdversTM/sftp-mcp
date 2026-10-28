@@ -1,6 +1,35 @@
 # SFTP MCP Server
 
-Node ESM MCP server for SFTP accounts, including chrooted accounts limited to the SFTP subsystem. It uses one warm SSH/SFTP channel and retries an operation once after a confirmed connection-level failure.
+Node ESM MCP server for SFTP accounts, including chrooted accounts limited to the SFTP subsystem. One server process can target many SFTP hosts: it keeps one warm SSH/SFTP channel per configured server and retries an operation once after a confirmed connection-level failure.
+
+## Multiple Servers
+
+Configure a JSON map of server id → connection data, either inline via `SFTP_SERVERS` or as a file via `SFTP_SERVERS_FILE` (not both):
+
+```json
+{
+  "prod": {
+    "host": "prod.example.test",
+    "username": "deploy",
+    "privateKey": "C:/Users/me/.ssh/id_ed25519",
+    "allowedWritePrefix": "/var/www",
+    "allowDestructive": false,
+    "description": "Production web"
+  },
+  "staging": {
+    "host": "staging.example.test",
+    "port": 2222,
+    "username": "ci",
+    "password": "secret"
+  }
+}
+```
+
+Server ids must match `[A-Za-z0-9][A-Za-z0-9_.-]*`. Per-server fields: `host` and `username` (alias `user`) (required), `port` (default `22`), `password`, `privateKey` (local key-file path), `passphrase`, `readyTimeout`, `readOnly`, `allowDestructive`, `allowedWritePrefix`, `allowedReadPrefix`, `description`. Unknown fields fail startup. `readyTimeout`, `readOnly`, and `allowDestructive` default to `SFTP_READY_TIMEOUT`, `SFTP_READ_ONLY`, and `SFTP_ALLOW_DESTRUCTIVE`. The single-server variables (`SFTP_HOST`, `SFTP_PORT`, `SFTP_USER`, `SFTP_PASSWORD`, `SFTP_PRIVATE_KEY`, `SFTP_PASSPHRASE`, `SFTP_ALLOWED_*_PREFIX`) cannot be combined with a server map.
+
+`sftp_list_servers` lists the configured ids with `user@host:port`, access policy, and description. Every other tool requires a `server` argument; its JSON schema is an enum of the configured ids.
+
+Without `SFTP_SERVERS`/`SFTP_SERVERS_FILE`, the single-server variables below define one server with id `default`.
 
 ## Setup
 
@@ -18,7 +47,9 @@ Use `dist/index.js` as the stdio executable; it runs under Node. Package bin is 
 
 | Variable                    | Default   | Meaning                                                                                                 |
 |-----------------------------|-----------|---------------------------------------------------------------------------------------------------------|
-| `SFTP_HOST`                 | required  | SSH host                                                                                                |
+| `SFTP_SERVERS`              | unset     | Inline JSON server map (see Multiple Servers)                                                           |
+| `SFTP_SERVERS_FILE`         | unset     | Local path to a JSON server-map file                                                                    |
+| `SFTP_HOST`                 | required  | SSH host (single-server mode only)                                                                      |
 | `SFTP_PORT`                 | `22`      | SSH port, integer 1 through 65535                                                                       |
 | `SFTP_USER`                 | required  | SSH username                                                                                            |
 | `SFTP_PASSWORD`             | unset     | Password authentication                                                                                 |
@@ -64,7 +95,9 @@ Remote lexical checks do not prove symlink containment. A server-side symlink ca
 
 ## Tools
 
-Read tools: `sftp_list`, `sftp_read`, `sftp_download`, `sftp_stat`, `sftp_exists`, `sftp_download_many`.
+Discovery tool: `sftp_list_servers` (no arguments).
+
+Read tools (all require `server`): `sftp_list`, `sftp_read`, `sftp_download`, `sftp_stat`, `sftp_exists`, `sftp_sha256`, `sftp_download_many`.
 
 Mutation tools: `sftp_write`, `sftp_delete`, `sftp_mkdir`, `sftp_rmdir`, `sftp_rename`, `sftp_upload`, `sftp_write_many`, `sftp_delete_many`, `sftp_upload_many`, `sftp_sync_dir`.
 

@@ -1,7 +1,7 @@
 import { Client } from "ssh2";
 import type { SFTPWrapper } from "ssh2";
 
-import type { SftpConfig } from "./config.js";
+import type { SftpServerConfig } from "./config.js";
 import { SftpOperationError, errorMessage } from "./errors.js";
 import type { SftpDirectoryEntry, SftpProvider, SftpStats, TransferOptions } from "./sftp-types.js";
 
@@ -17,7 +17,7 @@ export class Ssh2SftpProvider implements SftpProvider {
   #shared: SharedConnection | undefined;
   #connecting: Promise<SharedConnection> | undefined;
 
-  constructor(private readonly config: SftpConfig) {}
+  constructor(private readonly config: SftpServerConfig) {}
 
   async readdir(remotePath: string): Promise<readonly SftpDirectoryEntry[]> {
     return this.withSftp(

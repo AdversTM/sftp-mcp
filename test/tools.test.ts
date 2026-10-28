@@ -3,13 +3,20 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
+import type { PathGuardConfig } from "../src/paths.js";
 import { createToolRegistry } from "../src/server.js";
+import type { ToolRegistry } from "../src/server.js";
 import type {
+  FileHash,
   SftpDirectoryEntry,
   SftpProvider,
   SftpStats,
   TransferOptions,
 } from "../src/sftp-types.js";
+
+function singleServer(provider: SftpProvider, policy: Partial<PathGuardConfig>): ToolRegistry {
+  return createToolRegistry({ servers: [{ id: "main", provider, policy }], config: {} });
+}
 
 class FakeSftpProvider implements SftpProvider {
   readonly calls: string[] = [];
@@ -67,10 +74,14 @@ describe("tool authorization", () => {
   it("denies write before SFTP call in read-only mode", async () => {
     // Given
     const provider = new FakeSftpProvider();
-    const tools = createToolRegistry({ provider, config: { readOnly: true } });
+    const tools = singleServer(provider, { readOnly: true });
 
     // When
-    const result = await tools.invoke("sftp_write", { remotePath: "/site/a.txt", content: "x" });
+    const result = await tools.invoke("sftp_write", {
+      server: "main",
+      remotePath: "/site/a.txt",
+      content: "x",
+    });
 
     // Then
     expect(result.isError).toBe(true);
@@ -80,16 +91,20 @@ describe("tool authorization", () => {
   it("denies destructive tools before provider calls when destructive actions are disabled", async () => {
     // Given
     const provider = new FakeSftpProvider();
-    const tools = createToolRegistry({ provider, config: { destructiveActionsAllowed: false } });
+    const tools = singleServer(provider, { destructiveActionsAllowed: false });
 
     // When
     const results = await Promise.all([
-      tools.invoke("sftp_delete", { remotePath: "/site/a.txt" }),
-      tools.invoke("sftp_delete_many", { remotePaths: ["/site/a.txt"] }),
-      tools.invoke("sftp_rmdir", { remotePath: "/site", recursive: false }),
-      tools.invoke("sftp_rmdir", { remotePath: "/site", recursive: true }),
-      tools.invoke("sftp_rename", { fromPath: "/site/a.txt", toPath: "/site/b.txt" }),
-      tools.invoke("sftp_sync_dir", { localDir: "/missing", remoteDir: "/site" }),
+      tools.invoke("sftp_delete", { server: "main", remotePath: "/site/a.txt" }),
+      tools.invoke("sftp_delete_many", { server: "main", remotePaths: ["/site/a.txt"] }),
+      tools.invoke("sftp_rmdir", { server: "main", remotePath: "/site", recursive: false }),
+      tools.invoke("sftp_rmdir", { server: "main", remotePath: "/site", recursive: true }),
+      tools.invoke("sftp_rename", {
+        server: "main",
+        fromPath: "/site/a.txt",
+        toPath: "/site/b.txt",
+      }),
+      tools.invoke("sftp_sync_dir", { server: "main", localDir: "/missing", remoteDir: "/site" }),
     ]);
 
     // Then
@@ -101,10 +116,14 @@ describe("tool authorization", () => {
   it("allows ordinary writes when destructive actions are disabled", async () => {
     // Given
     const provider = new FakeSftpProvider();
-    const tools = createToolRegistry({ provider, config: { destructiveActionsAllowed: false } });
+    const tools = singleServer(provider, { destructiveActionsAllowed: false });
 
     // When
-    const result = await tools.invoke("sftp_write", { remotePath: "/site/a.txt", content: "x" });
+    const result = await tools.invoke("sftp_write", {
+      server: "main",
+      remotePath: "/site/a.txt",
+      content: "x",
+    });
 
     // Then
     expect(result.isError).toBeUndefined();
@@ -116,10 +135,11 @@ describe("tool authorization", () => {
     const provider = new FakeSftpProvider();
     const localDir = mkdtempSync(path.join(tmpdir(), "sftp-mcp-test-"));
     writeFileSync(path.join(localDir, "file.txt"), "content");
-    const tools = createToolRegistry({ provider, config: { destructiveActionsAllowed: false } });
+    const tools = singleServer(provider, { destructiveActionsAllowed: false });
 
     // When
     const result = await tools.invoke("sftp_sync_dir", {
+      server: "main",
       localDir,
       remoteDir: "/site",
       dryRun: true,
@@ -133,16 +153,21 @@ describe("tool authorization", () => {
   it("guards every remote read tool path before SFTP calls", async () => {
     // Given
     const provider = new FakeSftpProvider();
-    const tools = createToolRegistry({ provider, config: { allowedReadPrefix: "/public" } });
+    const tools = singleServer(provider, { allowedReadPrefix: "/public" });
 
     // When
     const results = await Promise.all([
-      tools.invoke("sftp_list", { remotePath: "/private" }),
-      tools.invoke("sftp_read", { remotePath: "/private/a" }),
-      tools.invoke("sftp_download", { remotePath: "/private/a", localPath: "/tmp/a" }),
-      tools.invoke("sftp_stat", { remotePath: "/private/a" }),
-      tools.invoke("sftp_exists", { remotePath: "/private/a" }),
+      tools.invoke("sftp_list", { server: "main", remotePath: "/private" }),
+      tools.invoke("sftp_read", { server: "main", remotePath: "/private/a" }),
+      tools.invoke("sftp_download", {
+        server: "main",
+        remotePath: "/private/a",
+        localPath: "/tmp/a",
+      }),
+      tools.invoke("sftp_stat", { server: "main", remotePath: "/private/a" }),
+      tools.invoke("sftp_exists", { server: "main", remotePath: "/private/a" }),
       tools.invoke("sftp_download_many", {
+        server: "main",
         files: [{ remotePath: "/private/a", localPath: "/tmp/a" }],
       }),
     ]);
@@ -155,10 +180,11 @@ describe("tool authorization", () => {
   it("requires both rename paths inside write prefix", async () => {
     // Given
     const provider = new FakeSftpProvider();
-    const tools = createToolRegistry({ provider, config: { allowedWritePrefix: "/deploy" } });
+    const tools = singleServer(provider, { allowedWritePrefix: "/deploy" });
 
     // When
     const result = await tools.invoke("sftp_rename", {
+      server: "main",
       fromPath: "/other/source.txt",
       toPath: "/deploy/destination.txt",
     });
@@ -173,13 +199,14 @@ describe("tool authorization", () => {
     const provider = new FakeSftpProvider();
     const localDir = mkdtempSync(path.join(tmpdir(), "sftp-mcp-test-"));
     writeFileSync(path.join(localDir, "file.txt"), "content");
-    const tools = createToolRegistry({
-      provider,
-      config: { allowedWritePrefix: "/deploy", allowedReadPrefix: "/public" },
+    const tools = singleServer(provider, {
+      allowedWritePrefix: "/deploy",
+      allowedReadPrefix: "/public",
     });
 
     // When
     const result = await tools.invoke("sftp_sync_dir", {
+      server: "main",
       localDir,
       remoteDir: "/deploy",
       dryRun: true,

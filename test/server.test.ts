@@ -31,7 +31,7 @@ describe("MCP tool registration", () => {
   it("omits disabled tools from the client-visible tool list", async () => {
     // Given
     const server = createServer({
-      provider,
+      servers: [{ id: "main", provider }],
       config: { disabledTools: ["sftp_upload", "sftp_sync_dir"] },
     });
     const client = new Client({ name: "test-client", version: "1.0.0" });
@@ -44,6 +44,7 @@ describe("MCP tool registration", () => {
 
     // Then
     expect(response.tools.map((tool) => tool.name)).toEqual([
+      "sftp_list_servers",
       "sftp_list",
       "sftp_read",
       "sftp_write",
@@ -59,6 +60,49 @@ describe("MCP tool registration", () => {
       "sftp_upload_many",
       "sftp_download_many",
     ]);
+    await client.close();
+    await server.close();
+  });
+
+  it("requires a server id enum on every tool except sftp_list_servers", async () => {
+    // Given
+    const server = createServer({
+      servers: [
+        { id: "prod", provider },
+        { id: "staging", provider },
+      ],
+      config: {},
+    });
+    const client = new Client({ name: "test-client", version: "1.0.0" });
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair();
+    await server.connect(serverTransport);
+    await client.connect(clientTransport);
+
+    // When
+    const { tools } = await client.listTools();
+    const listed = await client.callTool({ name: "sftp_list_servers", arguments: {} });
+    const routed = await client.callTool({
+      name: "sftp_list",
+      arguments: { server: "staging", remotePath: "/" },
+    });
+    const rejected = await client.callTool({
+      name: "sftp_list",
+      arguments: { server: "unknown", remotePath: "/" },
+    });
+
+    // Then
+    for (const tool of tools) {
+      const properties = tool.inputSchema.properties ?? {};
+      if (tool.name === "sftp_list_servers") {
+        expect(properties).toEqual({});
+        continue;
+      }
+      expect(properties).toMatchObject({ server: { type: "string", enum: ["prod", "staging"] } });
+      expect(tool.inputSchema.required).toContain("server");
+    }
+    expect(listed.content).toEqual([{ type: "text", text: "servers (2)\nprod\nstaging" }]);
+    expect(routed.isError).toBeFalsy();
+    expect(rejected.isError).toBe(true);
     await client.close();
     await server.close();
   });
