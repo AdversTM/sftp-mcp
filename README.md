@@ -99,7 +99,9 @@ Discovery tool: `sftp_list_servers` (no arguments).
 
 Read tools (all require `server`): `sftp_list`, `sftp_read`, `sftp_download`, `sftp_stat`, `sftp_exists`, `sftp_sha256`, `sftp_download_many`.
 
-Mutation tools: `sftp_write`, `sftp_delete`, `sftp_mkdir`, `sftp_rmdir`, `sftp_rename`, `sftp_upload`, `sftp_write_many`, `sftp_delete_many`, `sftp_upload_many`, `sftp_sync_dir`.
+`sftp_sha256` first tries `sha256sum` on the server through an SSH exec channel, so no file data is transferred. That path is used only when the remote path contains shell-inert characters (`A-Z a-z 0-9 . _ / space + @ , = : ~ -`). If the account refuses exec (SFTP-only or chrooted accounts) or `sha256sum` is missing, the server remembers that for the connection's server entry and streams the file over SFTP, hashing it in memory without writing to local disk. The response line uses `sha256sum` format and states which method was used. Plain SFTP has no portable server-side hash operation.
+
+Mutation tools (all require `server`): `sftp_write`, `sftp_delete`, `sftp_mkdir`, `sftp_rmdir`, `sftp_rename`, `sftp_upload`, `sftp_write_many`, `sftp_delete_many`, `sftp_upload_many`, `sftp_sync_dir`.
 
 Success responses contain one MCP text block. Failures contain `ERROR: ` text and `isError: true`. Batch failure listings remain capped at 50 lines.
 

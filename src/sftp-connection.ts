@@ -1,9 +1,17 @@
+import { createHash } from "node:crypto";
+
 import { Client } from "ssh2";
 import type { SFTPWrapper } from "ssh2";
 
 import type { SftpServerConfig } from "./config.js";
 import { SftpOperationError, errorMessage } from "./errors.js";
-import type { SftpDirectoryEntry, SftpProvider, SftpStats, TransferOptions } from "./sftp-types.js";
+import type {
+  FileHash,
+  SftpDirectoryEntry,
+  SftpProvider,
+  SftpStats,
+  TransferOptions,
+} from "./sftp-types.js";
 
 type SharedConnection = {
   readonly client: Client;
@@ -13,9 +21,18 @@ type SharedConnection = {
 const connectionErrorPattern =
   /(ECONNRESET|ETIMEDOUT|EPIPE|ECONNREFUSED|not connected|no sftp connection|connection (closed|lost|reset|ended)|handshake|channel|no response|timed out|socket|closed)/i;
 
+// Paths passed to a remote shell are limited to characters that are inert in POSIX sh
+// single quotes and in Windows cmd (no quotes, &, |, ;, $, %, !, backticks, redirects).
+const shellSafePathPattern = /^\/[A-Za-z0-9._/ +@,=:~-]*$/;
+const sha256sumOutputPattern = /^([0-9a-f]{64})\s/;
+const commandNotFoundExitCode = 127;
+
+type ChunkResult = { readonly data: Buffer } | { readonly error: unknown };
+
 export class Ssh2SftpProvider implements SftpProvider {
   #shared: SharedConnection | undefined;
   #connecting: Promise<SharedConnection> | undefined;
+  #remoteHashUnavailable = false;
 
   constructor(private readonly config: SftpServerConfig) {}
 
@@ -105,6 +122,17 @@ export class Ssh2SftpProvider implements SftpProvider {
     );
   }
 
+  async sha256(remotePath: string, options: TransferOptions): Promise<FileHash> {
+    if (!this.#remoteHashUnavailable && shellSafePathPattern.test(remotePath)) {
+      const digest = await this.remoteSha256(remotePath);
+      if (digest !== undefined) {
+        return { digest, method: "remote" };
+      }
+    }
+    const digest = await this.withSftp((sftp) => this.streamSha256(sftp, remotePath, options));
+    return { digest, method: "stream" };
+  }
+
   async warm(): Promise<void> {
     await this.getConnection();
   }
@@ -142,6 +170,110 @@ export class Ssh2SftpProvider implements SftpProvider {
         reject(error);
       });
     });
+  }
+
+  private async remoteSha256(remotePath: string): Promise<string | undefined> {
+    const { client } = await this.getConnection();
+    return new Promise<string | undefined>((resolve) => {
+      client.exec(`sha256sum -- '${remotePath}'`, (error, channel) => {
+        if (error !== undefined) {
+          this.#remoteHashUnavailable = true;
+          resolve(undefined);
+          return;
+        }
+        let stdout = "";
+        let exitCode: number | null = null;
+        channel.on("data", (chunk: Buffer) => {
+          stdout += chunk.toString("utf8");
+        });
+        channel.stderr.resume();
+        channel.on("exit", (code: number | null) => {
+          exitCode = code;
+        });
+        channel.on("close", () => {
+          if (exitCode === commandNotFoundExitCode) {
+            this.#remoteHashUnavailable = true;
+          }
+          const digest = exitCode === 0 ? sha256sumOutputPattern.exec(stdout)?.[1] : undefined;
+          resolve(digest);
+        });
+      });
+    });
+  }
+
+  private async streamSha256(
+    sftp: SFTPWrapper,
+    remotePath: string,
+    options: TransferOptions,
+  ): Promise<string> {
+    const handle = await new Promise<Buffer>((resolve, reject) => {
+      sftp.open(remotePath, "r", (error, opened) => {
+        if (error !== undefined) {
+          reject(error);
+          return;
+        }
+        resolve(opened);
+      });
+    });
+    try {
+      const size = (await this.statResult((done) => sftp.fstat(handle, done))).size ?? 0;
+      const chunkCount = Math.ceil(size / options.chunkSize);
+      const hash = createHash("sha256");
+      const inFlight = new Map<number, Promise<ChunkResult>>();
+      let issued = 0;
+      for (let index = 0; index < chunkCount; index += 1) {
+        while (issued < chunkCount && inFlight.size < options.concurrency) {
+          const position = issued * options.chunkSize;
+          const length = Math.min(options.chunkSize, size - position);
+          inFlight.set(
+            issued,
+            this.readChunk(sftp, handle, position, length).then(
+              (data) => ({ data }),
+              (error: unknown) => ({ error }),
+            ),
+          );
+          issued += 1;
+        }
+        const result = await inFlight.get(index);
+        inFlight.delete(index);
+        if (result === undefined) {
+          throw new SftpOperationError(`chunk ${index} was never requested`);
+        }
+        if ("error" in result) {
+          throw result.error;
+        }
+        hash.update(result.data);
+      }
+      return hash.digest("hex");
+    } finally {
+      sftp.close(handle, () => undefined);
+    }
+  }
+
+  private async readChunk(
+    sftp: SFTPWrapper,
+    handle: Buffer,
+    position: number,
+    length: number,
+  ): Promise<Buffer> {
+    const buffer = Buffer.alloc(length);
+    let filled = 0;
+    while (filled < length) {
+      const bytesRead = await new Promise<number>((resolve, reject) => {
+        sftp.read(handle, buffer, filled, length - filled, position + filled, (error, count) => {
+          if (error !== undefined) {
+            reject(error);
+            return;
+          }
+          resolve(count);
+        });
+      });
+      if (bytesRead === 0) {
+        break;
+      }
+      filled += bytesRead;
+    }
+    return buffer.subarray(0, filled);
   }
 
   private async withSftp<T>(operation: (sftp: SFTPWrapper) => Promise<T>): Promise<T> {

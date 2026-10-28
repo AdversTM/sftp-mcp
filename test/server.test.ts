@@ -25,6 +25,9 @@ const provider: SftpProvider = {
   },
   async fastPut() {},
   async fastGet() {},
+  async sha256() {
+    return { digest: "", method: "stream" };
+  },
 };
 
 describe("MCP tool registration", () => {
@@ -55,6 +58,7 @@ describe("MCP tool registration", () => {
       "sftp_download",
       "sftp_stat",
       "sftp_exists",
+      "sftp_sha256",
       "sftp_write_many",
       "sftp_delete_many",
       "sftp_upload_many",

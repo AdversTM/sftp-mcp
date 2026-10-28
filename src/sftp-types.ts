@@ -17,6 +17,11 @@ export type TransferOptions = {
   readonly chunkSize: number;
 };
 
+export type FileHash = {
+  readonly digest: string;
+  readonly method: "remote" | "stream";
+};
+
 export interface SftpProvider {
   readdir(remotePath: string): Promise<readonly SftpDirectoryEntry[]>;
   readFile(remotePath: string): Promise<Buffer | string>;
@@ -29,4 +34,5 @@ export interface SftpProvider {
   lstat(remotePath: string): Promise<SftpStats>;
   fastPut(localPath: string, remotePath: string, options: TransferOptions): Promise<void>;
   fastGet(remotePath: string, localPath: string, options: TransferOptions): Promise<void>;
+  sha256(remotePath: string, options: TransferOptions): Promise<FileHash>;
 }

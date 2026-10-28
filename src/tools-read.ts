@@ -75,6 +75,16 @@ export function createReadTools(deps: ToolDependencies): Readonly<Record<string,
         throw error;
       }
     }),
+    sftp_sha256: wrap(async (input) => {
+      const { remotePath } = pathSchema.parse(input);
+      const path = deps.guards.guardRead(remotePath);
+      const { digest, method } = await deps.provider.sha256(path, deps.config.transfer);
+      const how =
+        method === "remote"
+          ? "computed on server via sha256sum"
+          : "streamed over SFTP, hashed locally";
+      return ok(`${digest}  ${path}\n(${how})`);
+    }),
     sftp_download_many: wrap(async (input) => {
       const { files, concurrency } = downloadManySchema.parse(input);
       const prepared = files.map((file) => ({

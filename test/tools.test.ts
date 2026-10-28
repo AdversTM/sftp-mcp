@@ -68,6 +68,11 @@ class FakeSftpProvider implements SftpProvider {
   async fastGet(remotePath: string, localPath: string, options: TransferOptions): Promise<void> {
     this.calls.push(`fastGet:${remotePath}:${localPath}:${options.chunkSize}`);
   }
+
+  async sha256(remotePath: string, options: TransferOptions): Promise<FileHash> {
+    this.calls.push(`sha256:${remotePath}:${options.chunkSize}`);
+    return { digest: "ab".repeat(32), method: "remote" };
+  }
 }
 
 describe("tool authorization", () => {
@@ -166,6 +171,7 @@ describe("tool authorization", () => {
       }),
       tools.invoke("sftp_stat", { server: "main", remotePath: "/private/a" }),
       tools.invoke("sftp_exists", { server: "main", remotePath: "/private/a" }),
+      tools.invoke("sftp_sha256", { server: "main", remotePath: "/private/a" }),
       tools.invoke("sftp_download_many", {
         server: "main",
         files: [{ remotePath: "/private/a", localPath: "/tmp/a" }],
@@ -215,5 +221,108 @@ describe("tool authorization", () => {
     // Then
     expect(result.isError).toBe(true);
     expect(provider.calls).toEqual([]);
+  });
+});
+
+describe("sftp_sha256", () => {
+  it("returns digest in sha256sum format with the method used", async () => {
+    // Given
+    const provider = new FakeSftpProvider();
+    const tools = singleServer(provider, {});
+
+    // When
+    const result = await tools.invoke("sftp_sha256", { server: "main", remotePath: "/a/../b.txt" });
+
+    // Then
+    expect(result.isError).toBeUndefined();
+    expect(result.content[0].text).toBe(
+      `${"ab".repeat(32)}  /b.txt\n(computed on server via sha256sum)`,
+    );
+    expect(provider.calls).toEqual(["sha256:/b.txt:32768"]);
+  });
+});
+
+describe("multi-server routing", () => {
+  it("routes each call to the selected server with that server's policy", async () => {
+    // Given
+    const prod = new FakeSftpProvider();
+    const staging = new FakeSftpProvider();
+    const tools = createToolRegistry({
+      servers: [
+        { id: "prod", provider: prod, policy: { readOnly: true } },
+        { id: "staging", provider: staging },
+      ],
+      config: {},
+    });
+
+    // When
+    const prodWrite = await tools.invoke("sftp_write", {
+      server: "prod",
+      remotePath: "/a.txt",
+      content: "x",
+    });
+    const stagingWrite = await tools.invoke("sftp_write", {
+      server: "staging",
+      remotePath: "/a.txt",
+      content: "x",
+    });
+    await tools.invoke("sftp_list", { server: "prod", remotePath: "/" });
+
+    // Then
+    expect(prodWrite.isError).toBe(true);
+    expect(stagingWrite.isError).toBeUndefined();
+    expect(prod.calls).toEqual(["readdir:/"]);
+    expect(staging.calls).toEqual(["writeFile:/a.txt:1"]);
+  });
+
+  it("rejects missing or unknown server ids before provider calls", async () => {
+    // Given
+    const provider = new FakeSftpProvider();
+    const tools = singleServer(provider, {});
+
+    // When
+    const missing = await tools.invoke("sftp_list", { remotePath: "/" });
+    const unknown = await tools.invoke("sftp_list", { server: "nope", remotePath: "/" });
+
+    // Then
+    expect(missing.isError).toBe(true);
+    expect(missing.content[0].text).toContain("server is required (available: main)");
+    expect(unknown.isError).toBe(true);
+    expect(unknown.content[0].text).toContain("unknown server: 'nope' (available: main)");
+    expect(provider.calls).toEqual([]);
+  });
+
+  it("lists configured servers with connection label, policy, and description", async () => {
+    // Given
+    const tools = createToolRegistry({
+      servers: [
+        {
+          id: "prod",
+          provider: new FakeSftpProvider(),
+          policy: { readOnly: true, allowedReadPrefix: "/public" },
+          label: "prod.example.test:22",
+          description: "Production web",
+        },
+        {
+          id: "staging",
+          provider: new FakeSftpProvider(),
+          policy: { destructiveActionsAllowed: false, allowedWritePrefix: "/www" },
+          label: "staging.example.test:2222",
+        },
+      ],
+      config: {},
+    });
+
+    // When
+    const result = await tools.invoke("sftp_list_servers", {});
+
+    // Then
+    expect(result.content[0].text).toBe(
+      [
+        "servers (2)",
+        "prod: prod.example.test:22 [read-only; read prefix /public] — Production web",
+        "staging: staging.example.test:2222 [non-destructive; write prefix /www]",
+      ].join("\n"),
+    );
   });
 });

@@ -11,6 +11,7 @@ export const toolNames = [
   "sftp_download",
   "sftp_stat",
   "sftp_exists",
+  "sftp_sha256",
   "sftp_write_many",
   "sftp_delete_many",
   "sftp_upload_many",

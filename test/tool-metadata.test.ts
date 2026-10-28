@@ -22,6 +22,8 @@ describe("MCP tool metadata", () => {
       sftp_stat: "Stat a remote path (read-only).",
       sftp_exists:
         "Check whether a remote path exists (read-only). Returns false | 'd' | '-' | 'l'.",
+      sftp_sha256:
+        "SHA-256 of a remote file (read-only). Runs sha256sum on the server over SSH exec when the account allows it (no transfer); otherwise streams the file over SFTP and hashes it in memory (nothing written locally).",
       sftp_write_many:
         "Write many remote text files in parallel on one connection. Much faster than N sequential writes across a high-latency link.",
       sftp_delete_many: "Delete many remote files in parallel on one connection.",
