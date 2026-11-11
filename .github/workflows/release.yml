@@ -1,0 +1,75 @@
+name: Release
+
+# Push a tag like v1.2.3 to publish the npm package and its MCP Registry entry.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  npm:
+    name: Publish to npm
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches package.json, server.json and server metadata
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for actual in \
+            "$(node -p 'require("./package.json").version')" \
+            "$(node -p 'require("./server.json").version')" \
+            "$(node -p 'require("./server.json").packages[0].version')"; do
+            test "$actual" = "$version" \
+              || { echo "::error::found version $actual, expected $version from tag"; exit 1; }
+          done
+          grep -q "version: \"$version\"" src/server.ts \
+            || { echo "::error::src/server.ts version does not match tag $GITHUB_REF_NAME"; exit 1; }
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install -g npm@latest
+      - run: bun install --frozen-lockfile
+      # A version published manually beforehand is skipped, so the registry job still runs.
+      - name: Check whether this version is already on npm
+        id: published
+        run: |
+          if npm view "$(node -p 'require("./package.json").name')@${GITHUB_REF_NAME#v}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          fi
+      # Uses NPM_TOKEN when the secret exists, otherwise npm trusted publishing (OIDC).
+      # Provenance attestations require a public repository.
+      - name: Publish
+        if: steps.published.outputs.exists != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PROVENANCE: ${{ github.event.repository.private && 'false' || 'true' }}
+        run: npm publish --access public --provenance="$PROVENANCE"
+
+  mcp-registry:
+    name: Publish to MCP Registry
+    needs: npm
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" \
+            | tar xz mcp-publisher
+      - run: ./mcp-publisher login github-oidc
+      - run: ./mcp-publisher publish
