@@ -30,7 +30,7 @@ export function normalizeRemotePath(input: string): string {
 }
 
 function withinPrefix(path: string, prefix: string): boolean {
-  return path === prefix || path.startsWith(`${prefix}/`);
+  return prefix === "/" || path === prefix || path.startsWith(`${prefix}/`);
 }
 
 function guardPrefix(path: string, prefix: string | undefined, kind: "read" | "write"): string {

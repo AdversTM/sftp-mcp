@@ -16,6 +16,23 @@ describe("remote path guards", () => {
     expect(read).toThrow(AuthorizationError);
   });
 
+  it("permits every absolute path when the prefix is root", () => {
+    // Given
+    const guards = createPathGuards({
+      readOnly: false,
+      allowedWritePrefix: "/",
+      allowedReadPrefix: "/",
+    });
+
+    // When
+    const written = guards.guardWrite("/state/profiles.json");
+    const read = guards.guardRead("/state/profiles.json");
+
+    // Then
+    expect(written).toBe("/state/profiles.json");
+    expect(read).toBe("/state/profiles.json");
+  });
+
   it("denies mutations before write-prefix matching in read-only mode", () => {
     // Given
     const guards = createPathGuards({ readOnly: true, allowedWritePrefix: "/deploy" });
