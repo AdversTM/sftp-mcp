@@ -66,3 +66,9 @@ build/
 .omo/
 .opencode/
 .codegraph/
+.serena/
+.claude/
+.cursor/
+.aider*
+AGENTS.md
+CLAUDE.md
