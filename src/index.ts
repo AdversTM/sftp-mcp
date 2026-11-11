@@ -33,6 +33,9 @@ async function main(): Promise<void> {
       entry.provider.close();
     }
     sink?.close();
+    // Installing a signal handler disables Node's default exit, and an open stdin
+    // keeps the event loop alive, so exit explicitly once resources are released.
+    process.exit(0);
   };
   process.once("SIGINT", stop);
   process.once("SIGTERM", stop);
