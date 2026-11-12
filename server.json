@@ -1,0 +1,87 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.AdversTM/sftp-mcp",
+  "title": "SFTP",
+  "description": "SFTP-only file access for AI: browse, edit, transfer and sync files, no shell access needed.",
+  "repository": {
+    "url": "https://github.com/AdversTM/sftp-mcp",
+    "source": "github",
+    "id": "1380093017"
+  },
+  "websiteUrl": "https://github.com/AdversTM/sftp-mcp#readme",
+  "version": "1.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "sftp-mcp",
+      "version": "1.1.1",
+      "runtimeHint": "npx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "SFTP_HOST",
+          "description": "SSH host (single-server mode).",
+          "format": "string"
+        },
+        {
+          "name": "SFTP_PORT",
+          "description": "SSH port.",
+          "format": "number",
+          "default": "22"
+        },
+        {
+          "name": "SFTP_USER",
+          "description": "SSH username (single-server mode).",
+          "format": "string"
+        },
+        {
+          "name": "SFTP_PASSWORD",
+          "description": "Password authentication.",
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "SFTP_PRIVATE_KEY",
+          "description": "Path to a private key file.",
+          "format": "filepath"
+        },
+        {
+          "name": "SFTP_PASSPHRASE",
+          "description": "Passphrase for the private key.",
+          "format": "string",
+          "isSecret": true
+        },
+        {
+          "name": "SFTP_SERVERS_FILE",
+          "description": "Path to a JSON map of server id to connection, for multiple servers. Replaces the single-server variables.",
+          "format": "filepath"
+        },
+        {
+          "name": "SFTP_READ_ONLY",
+          "description": "Deny every remote mutation.",
+          "format": "boolean",
+          "default": "false"
+        },
+        {
+          "name": "SFTP_ALLOW_DESTRUCTIVE",
+          "description": "Set to false to deny delete, rmdir, rename and non-dry-run sync.",
+          "format": "boolean",
+          "default": "true"
+        },
+        {
+          "name": "SFTP_ALLOWED_WRITE_PREFIX",
+          "description": "Absolute remote path prefix that mutations are limited to.",
+          "format": "string"
+        },
+        {
+          "name": "SFTP_ALLOWED_READ_PREFIX",
+          "description": "Absolute remote path prefix that reads are limited to.",
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}
