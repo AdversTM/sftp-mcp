@@ -177,7 +177,7 @@ const schemas: Readonly<Record<ToolName, z.ZodObject<z.ZodRawShape>>> = {
 };
 
 export function createServer(options: ServerOptions): McpServer {
-  const server = new McpServer({ name: "sftp-mcp", version: "1.1.3" });
+  const server = new McpServer({ name: "sftp-mcp", version: "1.1.4" });
   const [firstId, ...otherIds] = options.servers.map((entry) => entry.id);
   if (firstId === undefined) {
     throw new ConfigError("at least one SFTP server must be configured");
