@@ -14,7 +14,7 @@ const pathSchema = z.object({ remotePath: z.string() });
 const downloadSchema = z.object({ remotePath: z.string(), localPath: z.string() });
 const downloadManySchema = z.object({
   files: z.array(downloadSchema).min(1),
-  concurrency: z.number().int().positive().optional(),
+  concurrency: z.int().positive().optional(),
 });
 
 export function createReadTools(deps: ToolDependencies): Readonly<Record<string, ToolHandler>> {

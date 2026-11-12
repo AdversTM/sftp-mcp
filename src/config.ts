@@ -45,23 +45,21 @@ export const legacyServerId = "default";
 
 const serverIdPattern = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
 
-const serverEntrySchema = z
-  .object({
-    host: z.string().trim().min(1),
-    port: z.number().int().min(1).max(65535).optional(),
-    username: z.string().optional(),
-    user: z.string().optional(),
-    password: z.string().optional(),
-    privateKey: z.string().optional(),
-    passphrase: z.string().optional(),
-    readyTimeout: z.number().int().positive().optional(),
-    readOnly: z.boolean().optional(),
-    allowDestructive: z.boolean().optional(),
-    allowedWritePrefix: z.string().optional(),
-    allowedReadPrefix: z.string().optional(),
-    description: z.string().optional(),
-  })
-  .strict();
+const serverEntrySchema = z.strictObject({
+  host: z.string().trim().min(1),
+  port: z.int().min(1).max(65535).optional(),
+  username: z.string().optional(),
+  user: z.string().optional(),
+  password: z.string().optional(),
+  privateKey: z.string().optional(),
+  passphrase: z.string().optional(),
+  readyTimeout: z.int().positive().optional(),
+  readOnly: z.boolean().optional(),
+  allowDestructive: z.boolean().optional(),
+  allowedWritePrefix: z.string().optional(),
+  allowedReadPrefix: z.string().optional(),
+  description: z.string().optional(),
+});
 
 const serversSchema = z
   .record(
@@ -289,7 +287,8 @@ function mappedServers(
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const where = issue === undefined || issue.path.length === 0 ? "" : `.${issue.path.join(".")}`;
-    throw new ConfigError(`${source}${where}: ${issue?.message ?? "invalid server map"}`);
+    const message = issue?.code === "invalid_key" ? issue.issues[0]?.message : issue?.message;
+    throw new ConfigError(`${source}${where}: ${message ?? "invalid server map"}`);
   }
   return Object.entries(parsed.data).map(([id, entry]) =>
     buildServer(

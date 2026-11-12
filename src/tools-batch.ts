@@ -11,23 +11,23 @@ import type { ToolDependencies, ToolHandler } from "./tool-types.js";
 const writeManySchema = z.object({
   files: z.array(z.object({ remotePath: z.string(), content: z.string() })).min(1),
   createDirs: z.boolean().optional(),
-  concurrency: z.number().int().positive().optional(),
+  concurrency: z.int().positive().optional(),
 });
 const deleteManySchema = z.object({
   remotePaths: z.array(z.string()).min(1),
-  concurrency: z.number().int().positive().optional(),
+  concurrency: z.int().positive().optional(),
 });
 const uploadManySchema = z.object({
   files: z.array(z.object({ localPath: z.string(), remotePath: z.string() })).min(1),
   createDirs: z.boolean().optional(),
-  concurrency: z.number().int().positive().optional(),
+  concurrency: z.int().positive().optional(),
 });
 const syncSchema = z.object({
   localDir: z.string(),
   remoteDir: z.string(),
   delete: z.boolean().optional(),
   dryRun: z.boolean().optional(),
-  concurrency: z.number().int().positive().optional(),
+  concurrency: z.int().positive().optional(),
 });
 
 export function createBatchTools(deps: ToolDependencies): Readonly<Record<string, ToolHandler>> {

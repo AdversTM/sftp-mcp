@@ -152,27 +152,27 @@ const schemas: Readonly<Record<ToolName, z.ZodObject<z.ZodRawShape>>> = {
   sftp_write_many: z.object({
     files: z.array(z.object({ remotePath: z.string(), content: z.string() })).min(1),
     createDirs: z.boolean().optional(),
-    concurrency: z.number().int().positive().optional(),
+    concurrency: z.int().positive().optional(),
   }),
   sftp_delete_many: z.object({
     remotePaths: z.array(z.string()).min(1),
-    concurrency: z.number().int().positive().optional(),
+    concurrency: z.int().positive().optional(),
   }),
   sftp_upload_many: z.object({
     files: z.array(z.object({ localPath: z.string(), remotePath: z.string() })).min(1),
     createDirs: z.boolean().optional(),
-    concurrency: z.number().int().positive().optional(),
+    concurrency: z.int().positive().optional(),
   }),
   sftp_download_many: z.object({
     files: z.array(z.object({ remotePath: z.string(), localPath: z.string() })).min(1),
-    concurrency: z.number().int().positive().optional(),
+    concurrency: z.int().positive().optional(),
   }),
   sftp_sync_dir: z.object({
     localDir: z.string(),
     remoteDir: z.string(),
     delete: z.boolean().optional(),
     dryRun: z.boolean().optional(),
-    concurrency: z.number().int().positive().optional(),
+    concurrency: z.int().positive().optional(),
   }),
 };
 
@@ -201,11 +201,11 @@ export function createServer(options: ServerOptions): McpServer {
   return server;
 }
 
-function registerTool<Shape extends z.ZodRawShape>(
+function registerTool(
   server: McpServer,
   registry: ToolRegistry,
   name: ToolName,
-  inputSchema: z.ZodObject<Shape>,
+  inputSchema: z.ZodObject,
 ): void {
   server.registerTool(name, { description: toolDescriptions[name], inputSchema }, async (input) =>
     registry.invoke(name, input),
