@@ -1,6 +1,6 @@
 {
   "name": "sftp-mcp",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "mcpName": "io.github.AdversTM/sftp-mcp",
   "description": "SFTP-only MCP server: let AI assistants browse, edit, transfer and sync files without shell access. Works with chrooted accounts; per-server read-only, non-destructive and path policies.",
   "keywords": [
