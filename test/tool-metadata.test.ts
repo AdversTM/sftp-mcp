@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
-
-import { toolDescriptions } from "../src/server.js";
 import type { ToolName } from "../src/server.js";
+import { toolDescriptions } from "../src/server.js";
 
 describe("MCP tool metadata", () => {
   it("preserves every registered tool description", () => {

@@ -1,10 +1,9 @@
 import { createHash } from "node:crypto";
-
-import { Client } from "ssh2";
 import type { SFTPWrapper } from "ssh2";
+import { Client } from "ssh2";
 
 import type { SftpServerConfig } from "./config.js";
-import { SftpOperationError, errorMessage } from "./errors.js";
+import { errorMessage, SftpOperationError } from "./errors.js";
 import type {
   FileHash,
   SftpDirectoryEntry,

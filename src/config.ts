@@ -4,8 +4,8 @@ import { z } from "zod";
 
 import { AuthorizationError, ConfigError } from "./errors.js";
 import { normalizeRemotePath } from "./paths.js";
-import { isToolName } from "./tool-catalog.js";
 import type { ToolName } from "./tool-catalog.js";
+import { isToolName } from "./tool-catalog.js";
 
 const envSchema = z.object({
   SFTP_SERVERS: z.string().optional(),

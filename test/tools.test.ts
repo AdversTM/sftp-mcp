@@ -4,8 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { PathGuardConfig } from "../src/paths.js";
-import { createToolRegistry } from "../src/server.js";
 import type { ToolRegistry } from "../src/server.js";
+import { createToolRegistry } from "../src/server.js";
 import type {
   FileHash,
   SftpDirectoryEntry,

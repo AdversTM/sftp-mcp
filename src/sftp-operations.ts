@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import path, { posix } from "node:path";
 
-import { SftpOperationError, errorMessage } from "./errors.js";
+import { errorMessage, SftpOperationError } from "./errors.js";
 import type { PathGuards } from "./paths.js";
 import type { SftpDirectoryEntry, SftpProvider, SftpStats } from "./sftp-types.js";
 
